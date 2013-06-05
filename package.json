@@ -1,0 +1,19 @@
+{
+  "name": "repo-watcher",
+  "version": "0.0.1",
+  "description": "Watching repositories of github organazation members.",
+  "main": "index.js",
+  "dependencies": {
+    "async": "~0.2.9",
+    "request": "~2.21.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/fujixerox/repo-watcher.git"
+  },
+  "readmeFilename": "README.md",
+  "gitHead": "ccddbefcbe7309782ba9bac14edde78dccd7fff8",
+  "bugs": {
+    "url": "https://github.com/fujixerox/repo-watcher/issues"
+  }
+}
