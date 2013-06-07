@@ -1,20 +1,21 @@
-var url     = require('url')
-  , async   = require('async')
-  , request = require('request');
+var url      = require('url')
+  , async    = require('async')
+  , request  = require('request')
+  , argv = require('optimist').default({
+    token: process.env.GITHUB_TOKEN,
+    proxy: process.env.http_proxy,
+    org: process.env.GITHUB_ORG
+  }).argv;
 
-var githubOrg  = process.env.GITHUB_ORG;
-
-if (!githubOrg) {
-  console.error('require GitHub organization name.');
+if (!argv.org) {
+  console.error('Require GitHub Organization Name.');
   process.exit(1);
 }
 
-if (process.argv.length !== 3) {
-  console.error('require GitHub API Token.');
+if (!argv.token) {
+  console.error('Require GitHub Personal API Token.');
   process.exit(1);
 }
-
-var token = process.argv[2];
 
 function requestGithub(path, callback) {
   var option = {
@@ -25,12 +26,12 @@ function requestGithub(path, callback) {
     }),
     headers: {
       'User-Agent':    'repo-watcher/0.0.1',
-      'Authorization': 'token ' + token
+      'Authorization': 'token ' + argv.token
     },
     json: true
   };
-  if (typeof process.env.http_proxy !== 'undefined') {
-    option.proxy = process.env.http_proxy;
+  if (argv.proxy) {
+    option.proxy = argv.proxy;
   }
 
   request.get(option, function(err, res, json) {
@@ -44,7 +45,7 @@ function requestGithub(path, callback) {
 
 async.waterfall([
   function(callback) {
-    requestGithub('/orgs/' + githubOrg + '/members', function(err, members) {
+    requestGithub('/orgs/' + argv.org + '/members', function(err, members) {
       if (err) {
         callback(err);
         return;
@@ -65,10 +66,11 @@ async.waterfall([
       });
     });
   }
-], function(err, repo) {
-  if (err) {
-    console.error(err);
-    return;
+  ], function(err, repo) {
+    if (err) {
+      console.error(err);
+      return;
+    }
+    console.log('repository name: ' + repo.full_name);
   }
-  console.log('repository name: ' + repo.full_name);
-});
+);
