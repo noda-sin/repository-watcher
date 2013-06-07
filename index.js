@@ -2,36 +2,44 @@ var url     = require('url')
   , async   = require('async')
   , request = require('request');
 
-var githubId   = process.env.GITHUB_ID;
-var githubPass = process.env.GITHUB_PASS;
 var githubOrg  = process.env.GITHUB_ORG;
-
-if (!githubId || !githubPass) {
-  console.error('require GitHub id and pass for watching repositories.');
-  process.exit(1);
-}
 
 if (!githubOrg) {
   console.error('require GitHub organization name.');
   process.exit(1);
 }
 
+if (process.argv.length !== 3) {
+  console.error('require GitHub API Token.');
+  process.exit(1);
+}
+
+var token = process.argv[2];
+
 function requestGithub(path, callback) {
-  request.get({
+  var option = {
     url: url.format({
       protocol: 'https',
       hostname: 'api.github.com',
       pathname: path
     }),
-    headers: { 'User-Agent': 'repo-watcher/0.0.1' },
+    headers: {
+      'User-Agent':    'repo-watcher/0.0.1',
+      'Authorization': 'token ' + token
+    },
     json: true
-  }, function(err, res, json) {
+  };
+  if (typeof process.env.http_proxy !== 'undefined') {
+    option.proxy = process.env.http_proxy;
+  }
+
+  request.get(option, function(err, res, json) {
     if (err) {
       callback(err);
       return;
     }
     callback(null, json);
-  }).auth(githubId, githubPass, true);
+  });
 }
 
 async.waterfall([
