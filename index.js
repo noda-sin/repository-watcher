@@ -1,10 +1,10 @@
 var url      = require('url')
   , async    = require('async')
   , request  = require('request')
-  , argv = require('optimist').default({
+  , argv     = require('optimist').default({
     token: process.env.GITHUB_TOKEN,
     proxy: process.env.http_proxy,
-    org: process.env.GITHUB_ORG
+    org:   process.env.GITHUB_ORG
   }).argv;
 
 if (!argv.org) {
@@ -17,7 +17,7 @@ if (!argv.token) {
   process.exit(1);
 }
 
-function requestGithub(path, callback) {
+function requestToGithub(path, callback) {
   var option = {
     url: url.format({
       protocol: 'https',
@@ -25,7 +25,7 @@ function requestGithub(path, callback) {
       pathname: path
     }),
     headers: {
-      'User-Agent':    'repo-watcher/0.0.1',
+      'User-Agent':    'repository-watcher/0.0.1',
       'Authorization': 'token ' + argv.token
     },
     json: true
@@ -45,7 +45,7 @@ function requestGithub(path, callback) {
 
 async.waterfall([
   function(callback) {
-    requestGithub('/orgs/' + argv.org + '/members', function(err, members) {
+    requestToGithub('/orgs/' + argv.org + '/members', function(err, members) {
       if (err) {
         callback(err);
         return;
@@ -56,7 +56,7 @@ async.waterfall([
     });
   },
   function(member, callback) {
-    requestGithub('/users/' + member.login + '/repos', function(err, repos) {
+    requestToGithub('/users/' + member.login + '/repos', function(err, repos) {
       if (err) {
         callback(err);
         return;
