@@ -1,5 +1,4 @@
 var url      = require('url')
-  , async    = require('async')
   , request  = require('request')
   , argv     = require('optimist').default({
     token:    process.env.GITHUB_TOKEN,
