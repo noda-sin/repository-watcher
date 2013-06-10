@@ -80,7 +80,6 @@ function requestToGithub(args, callback) {
     callback(new Error('Insufficient arguments'));
     return;
   }
-
   var options = {
     url: url.format({
       protocol: 'https',
@@ -93,7 +92,7 @@ function requestToGithub(args, callback) {
     },
     json: true
   };
-  if (args.proxy) {
+  if (typeof args.proxy !== 'undfined' && args.proxy !== null) {
     options.proxy = args.proxy;
   }
   request.get(options, function(err, res, json) {
