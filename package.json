@@ -4,8 +4,8 @@
   "description": "Watching repositories of github organazation members.",
   "main": "index.js",
   "dependencies": {
-    "async": "~0.2.9",
-    "request": "~2.21.0"
+    "request": "~2.21.0",
+    "optimist": "~0.5.2"
   },
   "repository": {
     "type": "git",

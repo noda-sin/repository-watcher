@@ -8,52 +8,95 @@ var url      = require('url')
   }).argv;
 
 if (!argv.org) {
-  console.error('Require GitHub Organization Name.');
+  printError('Require GitHub Organization Name.');
   process.exit(1);
 }
 
 if (!argv.token) {
-  console.error('Require GitHub Personal API Token.');
+  printError('Require GitHub Personal API Token.');
   process.exit(1);
 }
 
-setInterval(function() {
-  requestToGithub('/orgs/' + argv.org + '/members', function(err, members) {
+if (1000 * 60 > argv.interval) {
+  printError('Interval is too low');
+  process.exit(1);
+}
+
+function loopToWatchRepos() {
+  getReposOfOrgMembers({
+    token: argv.token,
+    org:   argv.org,
+    proxy: argv.proxy
+  }, function(err, repos) {
     if (err) {
       printError(err);
       return;
     }
+    repos.forEach(function(repo) {
+      console.log('repository name: ' + repo.full_name);
+    });
+  });
+  setTimeout(loopToWatchRepos, argv.interval);
+}
+
+loopToWatchRepos();
+
+function getReposOfOrgMembers(args, callback) {
+  if (typeof args       !== 'object'    ||
+      typeof args.token === 'undefined' ||
+      typeof args.org   === 'undefined') {
+    callback(new Error('Insufficient arguments'));
+    return;
+  }
+  requestToGithub({
+    path:  '/orgs/' + args.org + '/members',
+    token: args.token,
+    proxy: args.proxy
+  }, function(err, members) {
+    if (err) {
+      callback(err);
+      return;
+    }
     members.forEach(function(member) {
-      requestToGithub('/users/' + member.login + '/repos', function(err, repos) {
+      requestToGithub({
+        path:  '/users/' + member.login + '/repos',
+        token: args.token,
+        proxy: args.proxy
+      }, function(err, repos) {
         if (err) {
-          printError(err);
+          callback(err);
           return;
         }
-        repos.forEach(function(repo) {
-          console.log('repository name: ' + repo.full_name);
-        });
+        callback(null, repos);
       });
     });
   });
-}, argv.interval);
+}
 
-function requestToGithub(path, callback) {
-  var option = {
+function requestToGithub(args, callback) {
+  if (typeof args       !== 'object'    ||
+      typeof args.path  === 'undefined' ||
+      typeof args.token === 'undefined' ||) {
+    callback(new Error('Insufficient arguments'));
+    return;
+  }
+
+  var options = {
     url: url.format({
       protocol: 'https',
       hostname: 'api.github.com',
-      pathname: path
+      pathname: args.path
     }),
     headers: {
       'User-Agent':    'repository-watcher/0.0.1',
-      'Authorization': 'token ' + argv.token
+      'Authorization': 'token ' + args.token
     },
     json: true
   };
-  if (argv.proxy) {
-    option.proxy = argv.proxy;
+  if (args.proxy) {
+    options.proxy = args.proxy;
   }
-  request.get(option, function(err, res, json) {
+  request.get(options, function(err, res, json) {
     if (err) {
       callback(err);
       return;
@@ -63,5 +106,5 @@ function requestToGithub(path, callback) {
 }
 
 function printError(error) {
-  console.error('[' + new Date().toUTCString() + '] ' + err);
+  console.error('[' + new Date().toUTCString() + '] ' + error);
 }
