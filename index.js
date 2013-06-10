@@ -1,10 +1,13 @@
 var url      = require('url')
+  , fs       = require('fs')
+  , path     = require('path')
   , request  = require('request')
   , argv     = require('optimist').default({
     token:    process.env.GITHUB_TOKEN,
     proxy:    process.env.http_proxy,
     org:      process.env.GITHUB_ORG,
-    interval: 1000 * 60
+    interval: 1000 * 60,
+    ignore:   path.join('ignore.json')
   }).argv;
 
 if (!argv.org) {
@@ -18,9 +21,34 @@ if (!argv.token) {
 }
 
 if (1000 * 60 > argv.interval) {
-  printError('Interval is too low');
+  printError('Interval is too low.');
   process.exit(1);
 }
+
+var ignoreFile = path.resolve(__dirname, argv.ignore);
+if (!fs.existsSync(ignoreFile)) {
+  printError(ignoreFile + ' is Not Found.');
+  printError('Require a JSON File of ignore repositories.');
+  process.exit(1);
+}
+
+var ignoreRepos = JSON.parse(fs.readFileSync(ignoreFile));
+fs.watchFile(ignoreFile, function(curr, prev) {
+  if (curr.mtime !== prev.mtime) { // Modified ignore file
+    fs.readFile(ignoreFile, function(err, data) {
+      if (err) {
+        printError(err);
+        return;
+      }
+      try {
+        ignoreRepos = JSON.parse(data);
+      } catch(err) {
+        printError(err);
+        return;
+      }
+    });
+  }
+});
 
 function loopToWatchRepos() {
   getReposOfOrgMembers({
@@ -33,7 +61,10 @@ function loopToWatchRepos() {
       return;
     }
     repos.forEach(function(repo) {
-      console.log('repository name: ' + repo.full_name);
+      if (ignoreRepos.indexOf(repo.full_name) === -1) {
+        // TODO: notificate repository to owner with mail.
+        console.log('repository name: ' + repo.full_name);
+      }
     });
   });
   setTimeout(loopToWatchRepos, argv.interval);
@@ -76,7 +107,7 @@ function getReposOfOrgMembers(args, callback) {
 function requestToGithub(args, callback) {
   if (typeof args       !== 'object'    ||
       typeof args.path  === 'undefined' ||
-      typeof args.token === 'undefined' ||) {
+      typeof args.token === 'undefined') {
     callback(new Error('Insufficient arguments'));
     return;
   }
