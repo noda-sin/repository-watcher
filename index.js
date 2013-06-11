@@ -1,13 +1,15 @@
-var url      = require('url')
-  , fs       = require('fs')
-  , path     = require('path')
-  , request  = require('request')
-  , argv     = require('optimist').default({
+var defaultInterval = 1000 * 60;
+
+var url     = require('url')
+  , fs      = require('fs')
+  , path    = require('path')
+  , request = require('request')
+  , argv    = require('optimist').default({
     token:    process.env.GITHUB_TOKEN,
     proxy:    process.env.http_proxy,
     org:      process.env.GITHUB_ORG,
-    interval: 1000 * 60,
-    ignore:   path.join('ignore.json')
+    interval: defaultInterval,
+    ignore:   'ignore.json'
   }).argv;
 
 if (!argv.org) {
@@ -20,89 +22,66 @@ if (!argv.token) {
   process.exit(1);
 }
 
-if (1000 * 60 > argv.interval) {
-  printError('Interval is too low.');
-  process.exit(1);
-}
+var interval = Math.max(defaultInterval, argv.interval);
 
 var ignoreFile = path.resolve(__dirname, argv.ignore);
 if (!fs.existsSync(ignoreFile)) {
   printError(ignoreFile + ' is Not Found.');
-  printError('Require a JSON File of ignore repositories.');
+  printError('Require JSON file of ignore repositories.');
   process.exit(1);
 }
 
 var ignoreRepos = JSON.parse(fs.readFileSync(ignoreFile));
 fs.watchFile(ignoreFile, function(curr, prev) {
-  if (curr.mtime !== prev.mtime) { // Modified ignore file
-    fs.readFile(ignoreFile, function(err, data) {
-      if (err) {
-        printError(err);
-        return;
-      }
-      try {
-        ignoreRepos = JSON.parse(data);
-      } catch(err) {
-        printError(err);
-        return;
-      }
-    });
+  if (curr.mtime === prev.mtime) {
+    return;
   }
-});
-
-function loopToWatchRepos() {
-  getReposOfOrgMembers({
-    token: argv.token,
-    org:   argv.org,
-    proxy: argv.proxy
-  }, function(err, repos) {
+  // ignore file has been modified.
+  fs.readFile(ignoreFile, function(err, data) {
     if (err) {
       printError(err);
       return;
     }
-    repos.forEach(function(repo) {
-      if (ignoreRepos.indexOf(repo.full_name) === -1) {
-        // TODO: notificate repository to owner with mail.
-        console.log('repository name: ' + repo.full_name);
-      }
-    });
+    try {
+      ignoreRepos = JSON.parse(data);
+    } catch(err) {
+      printError(err);
+    }
   });
-  setTimeout(loopToWatchRepos, argv.interval);
-}
+});
 
-loopToWatchRepos();
-
-function getReposOfOrgMembers(args, callback) {
-  if (typeof args       !== 'object'    ||
-      typeof args.token === 'undefined' ||
-      typeof args.org   === 'undefined') {
-    callback(new Error('Insufficient arguments'));
-    return;
-  }
+(function run() {
   requestToGithub({
-    path:  '/orgs/' + args.org + '/members',
-    token: args.token,
-    proxy: args.proxy
+    path:  '/orgs/' + argv.org + '/members',
+    token: argv.token,
+    proxy: argv.proxy
   }, function(err, members) {
     if (err) {
-      callback(err);
+      printError(err);
       return;
     }
     members.forEach(function(member) {
       requestToGithub({
         path:  '/users/' + member.login + '/repos',
-        token: args.token,
-        proxy: args.proxy
+        token: argv.token,
+        proxy: argv.proxy
       }, function(err, repos) {
         if (err) {
-          callback(err);
+          printError(err);
           return;
         }
-        callback(null, repos);
+        repos.forEach(function(repo) {
+          if (ignoreRepos.indexOf(repo.full_name) === -1) {
+            // TODO: notificate repository to owner with mail.
+            console.log('repository name: ' + repo.full_name);
+          }
+        });
       });
     });
   });
-}
+
+  setTimeout(run(), interval);
+})();
 
 function requestToGithub(args, callback) {
   if (typeof args       !== 'object'    ||
@@ -123,12 +102,16 @@ function requestToGithub(args, callback) {
     },
     json: true
   };
-  if (typeof args.proxy !== 'undfined' && args.proxy !== null) {
+  if (typeof args.proxy !== 'undefined' && args.proxy !== null) {
     options.proxy = args.proxy;
   }
   request.get(options, function(err, res, json) {
     if (err) {
       callback(err);
+      return;
+    }
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      callback(new Error('status code: ' + res.statusCode));
       return;
     }
     callback(null, json);
