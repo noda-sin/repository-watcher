@@ -31,7 +31,14 @@ if (!fs.existsSync(ignoreFile)) {
   process.exit(1);
 }
 
-var ignoreRepos = JSON.parse(fs.readFileSync(ignoreFile));
+var ignoreRepos;
+try {
+  ignoreRepos = JSON.parse(fs.readFileSync(ignoreFile));
+} catch(err) {
+  printError(ignoreRepos);
+  process.exit(1);
+}
+
 fs.watchFile(ignoreFile, function(curr, prev) {
   if (curr.mtime === prev.mtime) {
     return;
