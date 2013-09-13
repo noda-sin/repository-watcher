@@ -16,7 +16,7 @@ var url     = require('url')
     smtpPort: process.env.SMTP_PORT,
     mailAddr: process.env.ORG_MAIL_ADDR,
     interval: defaultInterval,
-    ignore:   'ignore.json',
+    ignore:   'ignore.json'
   }).argv
   , interval = Math.max(defaultInterval, argv.interval)
   , ignoreFile;
