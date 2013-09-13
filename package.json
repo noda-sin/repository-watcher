@@ -5,7 +5,8 @@
   "main": "index.js",
   "dependencies": {
     "request": "~2.21.0",
-    "optimist": "~0.5.2"
+    "optimist": "~0.5.2",
+    "nodemailer": "~0.5.2"
   },
   "repository": {
     "type": "git",
