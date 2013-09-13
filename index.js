@@ -7,17 +7,17 @@ var url     = require('url')
   , tmpDir  = path.join(__dirname, 'templates')
   , domain  = require('domain')
   , d       = domain.create()
+  , defaultInterval = 60 * 1000
   , argv    = require('optimist').default({
     token:    process.env.GITHUB_TOKEN,
     proxy:    process.env.http_proxy,
     org:      process.env.GITHUB_ORG,
-    interval: defaultInterval,
-    ignore:   'ignore.json',
     smtpHost: process.env.SMTP_HOST,
     smtpPort: process.env.SMTP_PORT,
-    mailAddr: process.env.ORG_MAIL_ADDR
+    mailAddr: process.env.ORG_MAIL_ADDR,
+    interval: defaultInterval,
+    ignore:   'ignore.json',
   }).argv
-  , defaultInterval = 60 * 1000
   , interval = Math.max(defaultInterval, argv.interval)
   , ignoreFile;
 
