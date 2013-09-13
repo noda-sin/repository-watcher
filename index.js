@@ -4,6 +4,7 @@ var url     = require('url')
   , fs      = require('fs')
   , path    = require('path')
   , request = require('request')
+  , domain  = require('domain').create()
   , argv    = require('optimist').default({
     token:    process.env.GITHUB_TOKEN,
     proxy:    process.env.http_proxy,
@@ -35,7 +36,7 @@ var ignoreRepos;
 try {
   ignoreRepos = JSON.parse(fs.readFileSync(ignoreFile));
 } catch(err) {
-  printError(ignoreRepos);
+  printError(err);
   process.exit(1);
 }
 
@@ -57,7 +58,8 @@ fs.watchFile(ignoreFile, function(curr, prev) {
   });
 });
 
-(function run() {
+domain.on('error', printError);
+domain.run(function run() {
   requestToGithub({
     path:  '/orgs/' + argv.org + '/members',
     token: argv.token,
@@ -86,9 +88,8 @@ fs.watchFile(ignoreFile, function(curr, prev) {
       });
     });
   });
-
-  setTimeout(run(), interval);
-})();
+  setTimeout(run, interval);
+});
 
 function requestToGithub(args, callback) {
   if (typeof args       !== 'object'    ||
