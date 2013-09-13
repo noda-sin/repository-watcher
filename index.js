@@ -5,7 +5,8 @@ var url     = require('url')
   , mailer  = require('nodemailer')
   , mailTmp = require('email-templates')
   , tmpDir  = path.join(__dirname, 'templates')
-  , domain  = require('domain').create()
+  , domain  = require('domain')
+  , d       = domain.create()
   , argv    = require('optimist').default({
     token:    process.env.GITHUB_TOKEN,
     proxy:    process.env.http_proxy,
@@ -47,34 +48,50 @@ if (!argv.mailAddr) {
   process.exit(1);
 }
 
-domain.on('error', printError);
-domain.run(function() {
+d.on('error', printError);
+d.run(function() {
+
+  function repositoriesOfMembersForEach(callback) {
+    requestToGithub({
+      path:  '/orgs/' + argv.org + '/members',
+      token: argv.token,
+      proxy: argv.proxy
+    }, function(err, members) {
+      if (err) {
+        callback(err);
+        return;
+      }
+      members.forEach(function(member) {
+        requestToGithub({
+          path:  '/users/' + member.login + '/repos',
+          token: argv.token,
+          proxy: argv.proxy
+        }, function(err, repos) {
+          if (err) {
+            callback(err);
+            return;
+          }
+          repos.forEach(function(repo) {
+            callback(null, repo);
+          });
+        });
+      });
+    });
+  }
+
   var ignoreRepos,
       smtp;
 
-  try {
-    ignoreRepos = JSON.parse(fs.readFileSync(ignoreFile));
-  } catch(err) {
-    printError(err);
-    return;
-  }
-
+  ignoreRepos = JSON.parse(fs.readFileSync(ignoreFile));
+ 
   fs.watchFile(ignoreFile, function(curr, prev) {
     if (curr.mtime === prev.mtime) {
       return;
     }
     // ignore file has been modified.
-    fs.readFile(ignoreFile, function(err, data) {
-      if (err) {
-        printError(err);
-        return;
-      }
-      try {
-        ignoreRepos = JSON.parse(data);
-      } catch(err) {
-        printError(err);
-      }
-    });
+    fs.readFile(ignoreFile, d.intercept(function(data) {
+      ignoreRepos = JSON.parse(data);
+    }));
   });
 
   smtp = mailer.createTransport('SMTP', {
@@ -82,72 +99,31 @@ domain.run(function() {
     port: argv.smtpProt
   });
 
-  mailTmp(tmpDir, function(err, tmp) {
-    if (err) {
-      printError(err);
-      return;
-    }
-
+  mailTmp(tmpDir, d.intercept(function(tmp) {
     function run() {
-      requestToGithub({
-        path:  '/orgs/' + argv.org + '/members',
-        token: argv.token,
-        proxy: argv.proxy
-      }, function(err, members) {
-        if (err) {
-          printError(err);
+      repositoriesOfMembersForEach(d.intercept(function(repo) {
+        if (ignoreRepos.indexOf(repo.full_name) > -1) {
           return;
         }
-        members.forEach(function(member) {
-          requestToGithub({
-            path:  '/users/' + member.login + '/repos',
-            token: argv.token,
-            proxy: argv.proxy
-          }, function(err, repos) {
-            if (err) {
-              printError(err);
-              return;
-            }
-            repos.forEach(function(repo) {
-              if (ignoreRepos.indexOf(repo.full_name) > -1) {
-                return;
-              }
-              tmp('new-repository', {
-                repoOwner: repo.owner.login,
-                repoUrl: repo.html_url,
-                repoName: repo.full_name
-              }, function(err, html) {
-                if (err) {
-                  printError(err);
-                  return;
-                }
-                smtp.sendMail({
-                  from: arg.mailAddr,
-                  to:   arg.mailAddr,
-                  subject: 'Organazation member created new repository.',
-                  html: html
-                }, function(err, status) {
-                  if (err) {
-                    printError(err);
-                    return;
-                  }
-                  ignoreRepos.push(repo.full_name);
-                  fs.writeFile(ignoreFile, JSON.stringify(ignoreRepos), function(err) {
-                    if (err) {
-                      printError(err);
-                      return;
-                    }
-                  });
-                });
-              });
-            });
-          });
-        });
-      });
+        tmp('new-repository', {
+          repoOwner: repo.owner.login,
+          repoUrl: repo.html_url,
+          repoName: repo.full_name
+        }, d.intercept(function(html) {
+          smtp.sendMail({
+            from: arg.mailAddr,
+            to:   arg.mailAddr,
+            subject: 'Organazation member created new repository.',
+            html: html
+          }, d.intercept(function(status) {
+            ignoreRepos.push(repo.full_name);
+            fs.writeFile(ignoreFile, JSON.stringify(ignoreRepos), d.intercept(function() {}));
+          }));
+        }));
+      }));
     }
-
     setTimeout(run, interval);
-  });
+  }));
 
 });
 
