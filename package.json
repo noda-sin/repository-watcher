@@ -6,15 +6,16 @@
   "dependencies": {
     "request": "~2.21.0",
     "optimist": "~0.5.2",
-    "nodemailer": "~0.5.2"
+    "nodemailer": "~0.5.2",
+    "email-templates": "~0.1.0"
   },
   "repository": {
     "type": "git",
-    "url": "git://github.com/fujixerox/repo-watcher.git"
+    "url": "git://github.com/fujixerox/repository-watcher.git"
   },
   "readmeFilename": "README.md",
   "gitHead": "ccddbefcbe7309782ba9bac14edde78dccd7fff8",
   "bugs": {
-    "url": "https://github.com/fujixerox/repo-watcher/issues"
+    "url": "https://github.com/fujixerox/repository-watcher/issues"
   }
 }

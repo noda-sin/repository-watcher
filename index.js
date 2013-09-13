@@ -1,17 +1,24 @@
-var defaultInterval = 1000 * 60;
-
 var url     = require('url')
   , fs      = require('fs')
   , path    = require('path')
   , request = require('request')
+  , mailer  = require('nodemailer')
+  , mailTmp = require('email-templates')
+  , tmpDir  = path.join(__dirname, 'templates')
   , domain  = require('domain').create()
   , argv    = require('optimist').default({
     token:    process.env.GITHUB_TOKEN,
     proxy:    process.env.http_proxy,
     org:      process.env.GITHUB_ORG,
     interval: defaultInterval,
-    ignore:   'ignore.json'
-  }).argv;
+    ignore:   'ignore.json',
+    smtpHost: process.env.SMTP_HOST,
+    smtpPort: process.env.SMTP_PORT,
+    mailAddr: process.env.ORG_MAIL_ADDR
+  }).argv
+  , defaultInterval = 60 * 1000
+  , interval = Math.max(defaultInterval, argv.interval)
+  , ignoreFile;
 
 if (!argv.org) {
   printError('Require GitHub Organization Name.');
@@ -23,72 +30,125 @@ if (!argv.token) {
   process.exit(1);
 }
 
-var interval = Math.max(defaultInterval, argv.interval);
-
-var ignoreFile = path.resolve(__dirname, argv.ignore);
+ignoreFile = path.resolve(__dirname, argv.ignore);
 if (!fs.existsSync(ignoreFile)) {
   printError(ignoreFile + ' is Not Found.');
   printError('Require JSON file of ignore repositories.');
   process.exit(1);
 }
 
-var ignoreRepos;
-try {
-  ignoreRepos = JSON.parse(fs.readFileSync(ignoreFile));
-} catch(err) {
-  printError(err);
+if (!argv.smtpHost || !argv.smtpPort) {
+  printError('Require SMTP Host and Port.');
+  process.exit(1);  
+}
+
+if (!argv.mailAddr) {
+  printError('Require Mail Address to notify.');
   process.exit(1);
 }
 
-fs.watchFile(ignoreFile, function(curr, prev) {
-  if (curr.mtime === prev.mtime) {
+domain.on('error', printError);
+domain.run(function() {
+  var ignoreRepos,
+      smtp;
+
+  try {
+    ignoreRepos = JSON.parse(fs.readFileSync(ignoreFile));
+  } catch(err) {
+    printError(err);
     return;
   }
-  // ignore file has been modified.
-  fs.readFile(ignoreFile, function(err, data) {
-    if (err) {
-      printError(err);
-      return;
-    }
-    try {
-      ignoreRepos = JSON.parse(data);
-    } catch(err) {
-      printError(err);
-    }
-  });
-});
 
-domain.on('error', printError);
-domain.run(function run() {
-  requestToGithub({
-    path:  '/orgs/' + argv.org + '/members',
-    token: argv.token,
-    proxy: argv.proxy
-  }, function(err, members) {
+  fs.watchFile(ignoreFile, function(curr, prev) {
+    if (curr.mtime === prev.mtime) {
+      return;
+    }
+    // ignore file has been modified.
+    fs.readFile(ignoreFile, function(err, data) {
+      if (err) {
+        printError(err);
+        return;
+      }
+      try {
+        ignoreRepos = JSON.parse(data);
+      } catch(err) {
+        printError(err);
+      }
+    });
+  });
+
+  smtp = mailer.createTransport('SMTP', {
+    host: argv.smtpHost,
+    port: argv.smtpProt
+  });
+
+  mailTmp(tmpDir, function(err, tmp) {
     if (err) {
       printError(err);
       return;
     }
-    members.forEach(function(member) {
+
+    function run() {
       requestToGithub({
-        path:  '/users/' + member.login + '/repos',
+        path:  '/orgs/' + argv.org + '/members',
         token: argv.token,
         proxy: argv.proxy
-      }, function(err, repos) {
+      }, function(err, members) {
         if (err) {
           printError(err);
           return;
         }
-        repos.forEach(function(repo) {
-          if (ignoreRepos.indexOf(repo.full_name) === -1) {
-            // TODO: notificate repository to owner with mail.
-            console.log('repository name: ' + repo.full_name);
-          }
+        members.forEach(function(member) {
+          requestToGithub({
+            path:  '/users/' + member.login + '/repos',
+            token: argv.token,
+            proxy: argv.proxy
+          }, function(err, repos) {
+            if (err) {
+              printError(err);
+              return;
+            }
+            repos.forEach(function(repo) {
+              if (ignoreRepos.indexOf(repo.full_name) > -1) {
+                return;
+              }
+              tmp('new-repository', {
+                repoOwner: repo.owner.login,
+                repoUrl: repo.html_url,
+                repoName: repo.full_name
+              }, function(err, html) {
+                if (err) {
+                  printError(err);
+                  return;
+                }
+                smtp.sendMail({
+                  from: arg.mailAddr,
+                  to:   arg.mailAddr,
+                  subject: 'Organazation member created new repository.',
+                  html: html
+                }, function(err, status) {
+                  if (err) {
+                    printError(err);
+                    return;
+                  }
+                  ignoreRepos.push(repo.full_name);
+                  fs.writeFile(ignoreFile, JSON.stringify(ignoreRepos), function(err) {
+                    if (err) {
+                      printError(err);
+                      return;
+                    }
+                  });
+                });
+              });
+            });
+          });
         });
       });
-    });
+    }
+
+    setTimeout(run, interval);
   });
-  setTimeout(run, interval);
+
 });
 
 function requestToGithub(args, callback) {
