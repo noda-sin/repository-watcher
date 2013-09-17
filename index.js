@@ -50,7 +50,6 @@ if (!argv.mailAddr) {
 
 d.on('error', printError);
 d.run(function() {
-
   function repositoriesOfMembersForEach(callback) {
     requestToGithub({
       path:  '/orgs/' + argv.org + '/members',
@@ -111,8 +110,8 @@ d.run(function() {
           repoName: repo.full_name
         }, d.intercept(function(html) {
           smtp.sendMail({
-            from: arg.mailAddr,
-            to:   arg.mailAddr,
+            from: argv.mailAddr,
+            to:   argv.mailAddr,
             subject: 'Organazation member created new repository.',
             html: html
           }, d.intercept(function(status) {
@@ -121,7 +120,7 @@ d.run(function() {
           }));
         }));
       }));
-    }
+    };
     setTimeout(run, interval);
   }));
 
